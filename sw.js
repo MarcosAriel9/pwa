@@ -11,6 +11,8 @@ const APP_SHELL = [
   "img/delta.jpg",
   "js/app.js",
 ];
+
+const OFFLINE_URL = ["/pages/offline.html"];
 //TODOS AQUELLOS RECURSOS QUE NO VAN A CAMBIAR
 const APP_SHELL_INMUTABLE = [
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js",
@@ -18,14 +20,18 @@ const APP_SHELL_INMUTABLE = [
 ];
 
 self.addEventListener("install", (event) => {
-  //event.skipWaiting();
+  // event.skipWaiting();
   const staticCache = caches.open(STATIC).then((cache) => {
     cache.addAll(APP_SHELL);
   });
   const inmutableCache = caches.open(INMUTABLE).then((cache) => {
     cache.addAll(APP_SHELL_INMUTABLE);
   });
-  event.waitUntil(Promise.all([staticCache, inmutableCache]));
+  const offlineCache = caches.open(OFFLINE_URL).then((cache) => {
+    cache.addAll(OFFLINE_URL);
+  });
+
+  event.waitUntil(Promise.all([staticCache, offlineCache, inmutableCache]));
 });
 
 self.addEventListener("activate", (event) => {
@@ -33,6 +39,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request).catch(() => {}));
+
   // 1. cache only
   // event.respondWith(caches.match(event.request));
   //2. cache with network fallback
@@ -47,19 +55,24 @@ self.addEventListener("fetch", (event) => {
   });
   event.respondWith(source);*/
   //3. network with cache fallback
-  /*const source = fetch(event.request)
+  const source = fetch(event.request)
     .then((res) => {
-      if (!res) throw Error("not found");
-      //revisar si el recurso ya existe en cache
-      caches.open(DYNAMIC).then((cache) => {
-        cache.put(event.request, res);
-      });
-      return res.clone();
+      if (!res) {
+        return caches.match(OFFLINE_URL);
+
+        //revisar si el recurso ya existe en cache
+        caches.open(DYNAMIC).then((cache) => {
+          cache.put(event.request, res);
+        });
+        return res.clone();
+      } else {
+        return caches.match(OFFLINE_URL);
+      }
     })
     .catch((err) => {
       return caches.match(event.request);
     });
-  event.respondWith(source);*/
+  event.respondWith(source);
   //4. cache with network update
   // rendimiento critico, si es bajo usar esta estrategia, desventaja, toda la aplicacion esta un paso atras
   /*if (e.request.url.includes("bootstrap"))
@@ -71,9 +84,8 @@ self.addEventListener("fetch", (event) => {
     return cache.match(e.request);
   });
   e.respondWith(source);*/
-
   //5 Cache and Network Race
-  const source = new Promise((resolve, reject) => {
+  /*const source = new Promise((resolve, reject) => {
     let reject = false;
     const failsOnce = () => {
       if (reject) {
@@ -95,7 +107,7 @@ self.addEventListener("fetch", (event) => {
       cacheRes ? resolve(cacheRes) : failsOnce();
     });
   });
-  event.respondWith(source);
+  event.respondWith(source);*/
 });
 
 self.addEventListener("push", (event) => {
